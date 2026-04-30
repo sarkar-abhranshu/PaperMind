@@ -27,6 +27,7 @@ PaperMind ingests research PDFs, chunks and embeds them using SciBERT, stores th
 | **Ingestion** | Multi-PDF upload, PyPDF2 text extraction, overlapping token chunking |
 | **Embeddings** | SciBERT (`allenai/scibert_scivocab_uncased`, 768-dim) with MiniLM fallback; GPU auto-detection (CUDA / MPS / CPU) |
 | **Retrieval** | ChromaDB vector store, cosine similarity, section-aware filtering, MMR diversity re-ranking |
+| **Reranking** | Cross-encoder reranking (default: `cross-encoder/ms-marco-MiniLM-L-6-v2`) for better relevance |
 | **Q&A** | RAG pipeline with grounded citation tags `[Excerpt N]`, multi-turn conversation history, disk-based caching |
 | **Analysis** | Structured extraction, LLM-powered summarisation, novelty scoring, citation network insight |
 | **Review** | Chain-of-Thought peer review per paper + cross-paper comparison |
@@ -139,6 +140,8 @@ Retrieve or update chunking and retrieval settings via the `/config` endpoints. 
 | `top_n_papers` | 3 | Papers selected by the document selection agent |
 | `similarity_threshold` | 0.70 | Minimum cosine similarity for chunk relevance |
 | `embedding_dim` | 768 | Set automatically from the loaded model (SciBERT=768, MiniLM=384) |
+| `cross_encoder_model` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder used for second-stage reranking |
+| `rerank_top_n` | 12 | Number of initial candidates to rerank (0 disables) |
 
 ```bash
 # Example: change chunk size before ingesting
@@ -444,7 +447,6 @@ python scripts/eval_qa.py \
 
 ### Retrieval & Embeddings
 - **Qdrant migration** — move from local ChromaDB to Qdrant for production-scale indexing and multi-node deployments.
-- **Cross-encoder reranking** — add a cross-encoder (e.g. `cross-encoder/ms-marco-MiniLM`) as a second-stage reranker after initial retrieval.
 - **Hybrid BM25 + dense retrieval** — combine sparse keyword matching with dense embeddings for better coverage on exact-match queries.
 
 ### LLM Integration

@@ -61,6 +61,8 @@ class ConfigUpdateRequest(BaseModel):
     top_k_chunks: int | None = None
     top_n_papers: int | None = None
     similarity_threshold: float | None = None
+    cross_encoder_model: str | None = None
+    rerank_top_n: int | None = None
 
 
 class ConfigResponse(BaseModel):
@@ -70,6 +72,8 @@ class ConfigResponse(BaseModel):
     top_n_papers: int
     similarity_threshold: float
     embedding_dim: int
+    cross_encoder_model: str
+    rerank_top_n: int
 
 
 # Dedicated request/response models for split endpoints

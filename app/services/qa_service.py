@@ -5,6 +5,7 @@ from app.config import settings
 from app.core.errors import ERRORS
 from app.core.state import state
 from app.services.embedding_engine import embed_texts
+from app.services.reranker import rerank_rows
 from app.services.llm_client import call_llm, LLMUnavailableError
 from app.utils.cache import DiskCache
 
@@ -316,6 +317,14 @@ def answer_question_with_sections(
             )
             if debug:
                 debug_payload["fallback_to_all_sections"] = True
+
+    if candidate_rows and settings.rerank_top_n > 0:
+        candidate_rows = rerank_rows(
+            question,
+            candidate_rows,
+            top_n=settings.rerank_top_n,
+            model_name=settings.cross_encoder_model,
+        )
 
     if debug:
         debug_payload["all_candidates"] = [
