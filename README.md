@@ -2,7 +2,7 @@
 
 **Multi-document research analysis powered by semantic search, LLM reasoning, and a zero-friction local UI.**
 
-PaperMind ingests research PDFs, chunks and embeds them using SciBERT, stores them in an in-memory vector database, and exposes a rich set of analysis endpoints — Q&A with grounded citations, peer review, citation extraction, research gap detection, hypothesis generation, and multi-level explanations. Everything runs locally; cloud LLM providers are optional and can be swapped via environment variables.
+PaperMind ingests research PDFs, chunks and embeds them using SciBERT, stores them in a persistent ChromaDB vector store, and exposes a rich set of analysis endpoints — Q&A with grounded citations, peer review, citation extraction, research gap detection, hypothesis generation, and multi-level explanations. Everything runs locally; cloud LLM providers are optional and can be swapped via environment variables.
 
 ---
 
@@ -26,7 +26,7 @@ PaperMind ingests research PDFs, chunks and embeds them using SciBERT, stores th
 |---|---|
 | **Ingestion** | Multi-PDF upload, PyPDF2 text extraction, overlapping token chunking |
 | **Embeddings** | SciBERT (`allenai/scibert_scivocab_uncased`, 768-dim) with MiniLM fallback; GPU auto-detection (CUDA / MPS / CPU) |
-| **Retrieval** | In-memory vector DB, cosine similarity, section-aware filtering, MMR diversity re-ranking |
+| **Retrieval** | ChromaDB vector store, cosine similarity, section-aware filtering, MMR diversity re-ranking |
 | **Q&A** | RAG pipeline with grounded citation tags `[Excerpt N]`, multi-turn conversation history, disk-based caching |
 | **Analysis** | Structured extraction, LLM-powered summarisation, novelty scoring, citation network insight |
 | **Review** | Chain-of-Thought peer review per paper + cross-paper comparison |
@@ -53,7 +53,7 @@ Section Detection (regex headings + LLM fallback)
     ├─► Overlapping Token Chunker
     │       │
     │       ▼
-    │   SciBERT Embeddings ──► In-Memory Vector DB
+    │   SciBERT Embeddings ──► ChromaDB (persistent)
     │
     └─► Paper-level Embedding (abstract seed)
 
@@ -71,7 +71,7 @@ Task Router ──► Q&A Service          (RAG + MMR + conversation history)
 ```
 
 **Key design choices:**
-- State lives in `AppState` (thread-safe with `RLock`); no external database required.
+- State lives in `AppState` (thread-safe with `RLock`); ChromaDB persists vector data locally without a separate service.
 - LLM calls are optional. Every service has a deterministic fallback so the system is fully usable without an API key.
 - LLM provider priority: **Groq → Gemini → OpenRouter** (auto-selected from env vars).
 - Config is locked after first ingestion to prevent dimension mismatches.
@@ -443,7 +443,7 @@ python scripts/eval_qa.py \
 ## Future Improvements
 
 ### Retrieval & Embeddings
-- **Persistent vector storage** — swap in-memory VectorDB for ChromaDB or Qdrant to survive server restarts and scale to large corpora.
+- **Qdrant migration** — move from local ChromaDB to Qdrant for production-scale indexing and multi-node deployments.
 - **Cross-encoder reranking** — add a cross-encoder (e.g. `cross-encoder/ms-marco-MiniLM`) as a second-stage reranker after initial retrieval.
 - **Hybrid BM25 + dense retrieval** — combine sparse keyword matching with dense embeddings for better coverage on exact-match queries.
 
