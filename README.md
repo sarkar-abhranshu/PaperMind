@@ -448,7 +448,6 @@ python scripts/eval_qa.py \
 
 ### Retrieval & Embeddings
 - **Qdrant migration** — move from local ChromaDB to Qdrant for production-scale indexing and multi-node deployments.
-- **Hybrid BM25 + dense retrieval** — combine sparse keyword matching with dense embeddings for better coverage on exact-match queries.
 
 ### LLM Integration
 - **Local model support** — add an Ollama provider so the system runs fully offline.
