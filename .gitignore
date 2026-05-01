@@ -5,3 +5,5 @@
 /app/utils/__pycache__
 eval/results.json
 eval/__pycache__
+data/chroma/
+paper/

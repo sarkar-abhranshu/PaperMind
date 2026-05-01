@@ -2,7 +2,7 @@ import threading
 from typing import Optional
 
 from app.models.schemas import Chunk, IngestedPaper
-from app.services.vector_db import InMemoryVectorDB
+from app.services.vector_db import ChromaVectorDB
 
 
 class AppState:
@@ -14,7 +14,7 @@ class AppState:
         self._sections: dict[str, dict[str, str]] = {}
         self._chunks: dict[str, list[Chunk]] = {}
         self._paper_embeddings: dict[str, list[float]] = {}
-        self._vdb = InMemoryVectorDB()
+        self._vdb = ChromaVectorDB()
         self._selected_papers: set[str] = set()
         self._conversations: dict[str, list[dict]] = {}
 
@@ -83,7 +83,7 @@ class AppState:
             self._paper_embeddings[paper_id] = embedding
 
     @property
-    def vdb(self) -> InMemoryVectorDB:
+    def vdb(self) -> ChromaVectorDB:
         """Direct access to VectorDB (VectorDB itself should be thread-safe)."""
         return self._vdb
 
@@ -142,7 +142,7 @@ class AppState:
             self._sections.clear()
             self._chunks.clear()
             self._paper_embeddings.clear()
-            self._vdb = InMemoryVectorDB()
+            self._vdb.reset()
             self._selected_papers.clear()
             self._conversations.clear()
 
