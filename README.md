@@ -142,6 +142,7 @@ Retrieve or update chunking and retrieval settings via the `/config` endpoints. 
 | `embedding_dim` | 768 | Set automatically from the loaded model (SciBERT=768, MiniLM=384) |
 | `cross_encoder_model` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Cross-encoder used for second-stage reranking |
 | `rerank_top_n` | 12 | Number of initial candidates to rerank (0 disables) |
+| `hybrid_alpha` | 0.7 | Dense vs BM25 weight (1.0 = dense-only, 0.0 = BM25-only) |
 
 ```bash
 # Example: change chunk size before ingesting

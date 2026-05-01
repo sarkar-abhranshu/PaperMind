@@ -63,6 +63,7 @@ class ConfigUpdateRequest(BaseModel):
     similarity_threshold: float | None = None
     cross_encoder_model: str | None = None
     rerank_top_n: int | None = None
+    hybrid_alpha: float | None = None
 
 
 class ConfigResponse(BaseModel):
@@ -74,6 +75,7 @@ class ConfigResponse(BaseModel):
     embedding_dim: int
     cross_encoder_model: str
     rerank_top_n: int
+    hybrid_alpha: float
 
 
 # Dedicated request/response models for split endpoints

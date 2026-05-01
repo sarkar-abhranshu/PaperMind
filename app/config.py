@@ -10,6 +10,7 @@ class Settings(BaseModel):
     embedding_dim: int = 768  # Updated: matches SciBERT output dim (fallback MiniLM uses 384, auto-detected)
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     rerank_top_n: int = 12
+    hybrid_alpha: float = 0.7
 
 
 settings = Settings()
@@ -31,6 +32,10 @@ def update_settings(values: dict[str, int | float | str]) -> Settings:
         threshold = float(values["similarity_threshold"])
         if threshold < 0.0 or threshold > 1.0:
             raise ValueError("similarity_threshold must be in [0, 1]")
+    if "hybrid_alpha" in values:
+        alpha = float(values["hybrid_alpha"])
+        if alpha < 0.0 or alpha > 1.0:
+            raise ValueError("hybrid_alpha must be in [0, 1]")
     if "rerank_top_n" in values and int(values["rerank_top_n"]) < 0:
         raise ValueError("rerank_top_n must be >= 0")
 

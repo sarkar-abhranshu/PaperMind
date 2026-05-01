@@ -5,6 +5,7 @@ from app.config import settings
 from app.core.errors import ERRORS
 from app.core.state import state
 from app.services.embedding_engine import embed_texts
+from app.services.bm25 import apply_hybrid_scores
 from app.services.reranker import rerank_rows
 from app.services.llm_client import call_llm, LLMUnavailableError
 from app.utils.cache import DiskCache
@@ -326,11 +327,20 @@ def answer_question_with_sections(
             model_name=settings.cross_encoder_model,
         )
 
+    if candidate_rows:
+        candidate_rows = apply_hybrid_scores(
+            question,
+            candidate_rows,
+            alpha=settings.hybrid_alpha,
+        )
+
     if debug:
         debug_payload["all_candidates"] = [
             {
                 "chunk_id": r["chunk_id"],
                 "score": round(r.get("score", 0), 4),
+                "bm25_score": round(r.get("bm25_score", 0), 4),
+                "hybrid_score": round(r.get("hybrid_score", 0), 4),
                 "section": r["section"],
                 "paper_id": r["paper_id"],
             }
@@ -352,7 +362,7 @@ def answer_question_with_sections(
             result["debug"] = debug_payload
         return result
     
-    # Filter by relevance threshold
+    # Filter by relevance threshold (dense scores)
     relevant_rows = [r for r in candidate_rows if r.get("score", 0) >= relevance_threshold]
 
     if debug:
@@ -379,6 +389,13 @@ def answer_question_with_sections(
             result["debug"] = debug_payload
         return result
     
+    # Reorder by hybrid score before final selection
+    relevant_rows = sorted(
+        relevant_rows,
+        key=lambda r: r.get("hybrid_score", r.get("score", 0.0)),
+        reverse=True,
+    )
+
     # Take top k from relevant chunks
     final_k = settings.top_k_chunks + 2 if is_abstractive else settings.top_k_chunks
     if is_abstractive:
