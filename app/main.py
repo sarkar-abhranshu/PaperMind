@@ -1,4 +1,7 @@
+import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -10,16 +13,23 @@ from app.core.errors import ERRORS
 from app.core.state import state
 from app.core.user_context import set_current_user_id
 from app.models.schemas import (
-    AnalysisRequest, AnalysisResponse,
-    CitationRequest, CitationResponse,
-    ConfigResponse, ConfigUpdateRequest,
-    ExplanationRequest, ExplanationResponse,
-    QARequest, QAResponse,
-    ReviewRequest, ReviewResponse,
-    TaskRequest, TaskResponse,
+    AnalysisRequest,
+    AnalysisResponse,
+    CitationRequest,
+    CitationResponse,
+    ConfigResponse,
+    ConfigUpdateRequest,
+    ExplanationRequest,
+    ExplanationResponse,
+    QARequest,
+    QAResponse,
+    ReviewRequest,
+    ReviewResponse,
+    TaskRequest,
+    TaskResponse,
 )
-from app.services.doc_selection_agent import select_documents
 from app.services.digest_service import generate_digest
+from app.services.doc_selection_agent import select_documents
 from app.services.input_handler import ingest_files
 from app.services.output_formatter import format_task_output
 from app.services.synthesis_service import find_research_gaps, generate_hypotheses
@@ -66,14 +76,19 @@ async def ingest(files: list[UploadFile] = File(...)) -> dict[str, object]:
 @app.post("/task", response_model=TaskResponse)
 def run_task(req: TaskRequest) -> TaskResponse:
     """
-    Legacy unified task endpoint. 
+    Legacy unified task endpoint.
     Prefer using dedicated endpoints: /api/qa, /api/citations, etc.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
 
     if req.task == "ask" and not (req.question or req.query):
-        raise HTTPException(status_code=400, detail={"code": "E011", "message": "QUESTION_REQUIRED_FOR_ASK"})
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "E011", "message": "QUESTION_REQUIRED_FOR_ASK"},
+        )
 
     selected = req.paper_ids or []
     if not selected:
@@ -108,17 +123,20 @@ def _get_selected_papers(paper_ids: list[str] | None) -> list[str]:
         if invalid_ids:
             raise HTTPException(
                 status_code=404,
-                detail={"code": "E012", "message": f"Invalid paper IDs: {invalid_ids}"}
+                detail={"code": "E012", "message": f"Invalid paper IDs: {invalid_ids}"},
             )
         return paper_ids
-    
+
     # Use selected papers from state
     if state.selected_papers:
         return list(state.selected_papers)
-    
+
     raise HTTPException(
         status_code=400,
-        detail={"code": "E013", "message": "No papers selected. Provide paper_ids or select papers first."}
+        detail={
+            "code": "E013",
+            "message": "No papers selected. Provide paper_ids or select papers first.",
+        },
     )
 
 
@@ -129,14 +147,19 @@ def answer_question(req: QARequest) -> QAResponse:
     Answer questions about research papers using RAG.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
+
     if not req.question or not req.question.strip():
-        raise HTTPException(status_code=400, detail={"code": "E011", "message": "QUESTION_REQUIRED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E011", "message": "QUESTION_REQUIRED"}
+        )
+
     selected = _get_selected_papers(req.paper_ids)
-    
+
     from app.services.qa_service import answer_question_with_sections
+
     result = answer_question_with_sections(
         req.question,
         selected,
@@ -144,7 +167,7 @@ def answer_question(req: QARequest) -> QAResponse:
         conversation_id=req.conversation_id,
         debug=req.debug,
     )
-    
+
     return QAResponse(
         question=result["question"],
         answer=result["answer"],
@@ -171,13 +194,16 @@ def analyze_citations(req: CitationRequest) -> CitationResponse:
     Extract and analyze citations from research papers.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
+
     selected = _get_selected_papers(req.paper_ids)
-    
+
     from app.services.citation_service import analyse_citations_for_papers
+
     result = analyse_citations_for_papers(selected)
-    
+
     return CitationResponse(
         citations=result.get("all_citations", []),
         selected_papers=selected,
@@ -191,13 +217,16 @@ def analyze_papers(req: AnalysisRequest) -> AnalysisResponse:
     Generate comprehensive analysis of research papers.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
+
     selected = _get_selected_papers(req.paper_ids)
-    
+
     from app.services.analysis_service import analyse
+
     result = analyse(selected)
-    
+
     return AnalysisResponse(
         analysis=result,
         selected_papers=selected,
@@ -211,13 +240,16 @@ def review_papers(req: ReviewRequest) -> ReviewResponse:
     Generate peer review feedback for research papers.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
+
     selected = _get_selected_papers(req.paper_ids)
-    
+
     from app.services.review_service import review
+
     result = review(selected)
-    
+
     return ReviewResponse(
         review=result,
         selected_papers=selected,
@@ -229,10 +261,13 @@ def research_gaps(req: dict = None) -> dict:
     """Find research gaps across selected papers."""
     if not state.papers:
         raise HTTPException(
-            status_code=400,
-            detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
         )
-    paper_ids = list(state.selected_papers) if state.selected_papers else list(state.papers.keys())
+    paper_ids = (
+        list(state.selected_papers)
+        if state.selected_papers
+        else list(state.papers.keys())
+    )
     return find_research_gaps(paper_ids)
 
 
@@ -241,10 +276,13 @@ def research_hypotheses(req: dict = None) -> dict:
     """Generate research hypotheses from selected papers."""
     if not state.papers:
         raise HTTPException(
-            status_code=400,
-            detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
         )
-    paper_ids = list(state.selected_papers) if state.selected_papers else list(state.papers.keys())
+    paper_ids = (
+        list(state.selected_papers)
+        if state.selected_papers
+        else list(state.papers.keys())
+    )
     return generate_hypotheses(paper_ids)
 
 
@@ -253,10 +291,13 @@ def session_digest(req: dict = None) -> dict:
     """Generate a 1-page executive digest of all ingested papers."""
     if not state.papers:
         raise HTTPException(
-            status_code=400,
-            detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
         )
-    paper_ids = list(state.selected_papers) if state.selected_papers else list(state.papers.keys())
+    paper_ids = (
+        list(state.selected_papers)
+        if state.selected_papers
+        else list(state.papers.keys())
+    )
     return generate_digest(paper_ids)
 
 
@@ -267,13 +308,16 @@ def explain_papers(req: ExplanationRequest) -> ExplanationResponse:
     Generate explanations of research papers at different expertise levels.
     """
     if not state.papers:
-        raise HTTPException(status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"})
-    
+        raise HTTPException(
+            status_code=400, detail={"code": "E008", "message": "NO_PAPERS_INGESTED"}
+        )
+
     selected = _get_selected_papers(req.paper_ids)
-    
+
     from app.services.explanation_service import explain
+
     result = explain(selected, req.level)
-    
+
     return ExplanationResponse(
         explanation=result,
         selected_papers=selected,
@@ -301,7 +345,9 @@ def patch_config(req: ConfigUpdateRequest) -> ConfigResponse:
     try:
         updated = update_settings(payload)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail={"code": "E010", "message": str(exc)}) from exc
+        raise HTTPException(
+            status_code=400, detail={"code": "E010", "message": str(exc)}
+        ) from exc
 
     return ConfigResponse(**updated.model_dump())
 
@@ -321,27 +367,34 @@ def list_papers() -> list[dict[str, object]]:
 @app.post("/papers/select")
 def update_paper_selection(req: dict[str, list[str]]) -> dict[str, object]:
     """Update the selection state of papers.
-    
+
     Args:
         req: Dictionary with 'paper_ids' list of paper IDs to select
-    
+
     Returns:
         Dictionary with updated selection state
     """
     paper_ids = req.get("paper_ids", [])
-    
+
     # Validate all paper IDs exist
     invalid_ids = [pid for pid in paper_ids if pid not in state.papers]
     if invalid_ids:
         raise HTTPException(
             status_code=404,
-            detail={"code": "E012", "message": f"Invalid paper IDs: {invalid_ids}"}
+            detail={"code": "E012", "message": f"Invalid paper IDs: {invalid_ids}"},
         )
-    
+
     # Update selected papers
     state.set_selected_papers(paper_ids)
-    
+
     return {
         "selected_count": len(state.selected_papers),
         "selected_papers": list(state.selected_papers),
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,13 +1,14 @@
 import logging
+import os
 import re as _re
 
 from app.config import settings
 from app.core.errors import ERRORS
 from app.core.state import state
-from app.services.embedding_engine import embed_texts
 from app.services.bm25 import apply_hybrid_scores
+from app.services.embedding_engine import embed_texts
+from app.services.llm_client import LLMUnavailableError, call_llm
 from app.services.reranker import rerank_rows
-from app.services.llm_client import call_llm, LLMUnavailableError
 from app.utils.cache import DiskCache
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 RELEVANCE_THRESHOLD = 0.35  # Tuned for SciBERT embeddings
 
 # Cache for Q&A results (1 hour TTL)
-_qa_cache = DiskCache(cache_dir="./cache/qa", max_age_seconds=3600)
+_cache_base = os.environ.get("DATA_DIR", "./data")
+_qa_cache = DiskCache(
+    cache_dir=os.path.join(_cache_base, "qa_cache"), max_age_seconds=3600
+)
 
 _SYSTEM_PROMPT = (
     "You are a research paper assistant. Answer questions strictly based on the "
@@ -37,7 +41,9 @@ def _lexical_jaccard(a: str, b: str) -> float:
     return len(ta & tb) / len(ta | tb)
 
 
-def _select_diverse_rows(rows: list[dict], k: int, diversity_lambda: float = 0.35) -> list[dict]:
+def _select_diverse_rows(
+    rows: list[dict], k: int, diversity_lambda: float = 0.35
+) -> list[dict]:
     """
     Greedy MMR-like selection:
     maximize relevance while penalizing near-duplicate chunks.
@@ -153,14 +159,15 @@ def _build_context_block(rows: list[dict]) -> str:
     """
     # Group by paper_id for better organization
     from collections import defaultdict
+
     grouped = defaultdict(list)
     for row in rows:
         grouped[row["paper_id"]].append(row)
-    
+
     # Sort within each group by chunk_index to preserve document order
     for paper_id in grouped:
         grouped[paper_id].sort(key=lambda r: r.get("chunk_index", 0))
-    
+
     # Build formatted context
     parts = []
     excerpt_num = 1
@@ -168,7 +175,7 @@ def _build_context_block(rows: list[dict]) -> str:
     for paper_id, chunks in grouped.items():
         paper = state.papers.get(str(paper_id))
         paper_name = paper.filename if paper else "unknown"
-        
+
         for row in chunks:
             score = row.get("score", 0.0)
             chunk_text = str(row.get("text", ""))
@@ -179,11 +186,13 @@ def _build_context_block(rows: list[dict]) -> str:
                 f"Section: {row['section']} | Relevance: {score:.2f}]\n{chunk_text}"
             )
             excerpt_num += 1
-    
+
     return "\n\n".join(parts)
 
 
-def _build_prompt(question: str, context_block: str, rows: list[dict], abstractive: bool = False) -> str:
+def _build_prompt(
+    question: str, context_block: str, rows: list[dict], abstractive: bool = False
+) -> str:
     paper_count = len({row["paper_id"] for row in rows})
 
     if paper_count > 1:
@@ -256,7 +265,9 @@ def _parse_grounded_answer(answer: str, rows: list[dict]) -> dict:
 
 
 def answer_question(question: str, paper_ids: list[str]) -> dict[str, object]:
-    return answer_question_with_sections(question, paper_ids, sections=None, conversation_id=None, debug=False)
+    return answer_question_with_sections(
+        question, paper_ids, sections=None, conversation_id=None, debug=False
+    )
 
 
 def answer_question_with_sections(
@@ -268,7 +279,7 @@ def answer_question_with_sections(
 ) -> dict[str, object]:
     """
     Answer a question using RAG with relevance filtering and caching.
-    
+
     Retrieves semantically similar chunks, filters by relevance threshold,
     and generates an answer using LLM with grounding verification.
     Results are cached for 1 hour to improve performance.
@@ -277,8 +288,12 @@ def answer_question_with_sections(
     cache_key = f"qa:{question}:{sorted(paper_ids)}:{sorted(sections) if sections else 'all'}:{conversation_id or 'none'}"
 
     is_abstractive = _is_abstractive_question(question)
-    relevance_threshold = RELEVANCE_THRESHOLD - 0.08 if is_abstractive else RELEVANCE_THRESHOLD
-    retrieval_k = settings.top_k_chunks * 3 if is_abstractive else settings.top_k_chunks * 2
+    relevance_threshold = (
+        RELEVANCE_THRESHOLD - 0.08 if is_abstractive else RELEVANCE_THRESHOLD
+    )
+    retrieval_k = (
+        settings.top_k_chunks * 3 if is_abstractive else settings.top_k_chunks * 2
+    )
 
     routed_sections = None
     search_sections = sections
@@ -294,15 +309,15 @@ def answer_question_with_sections(
         "routed_sections": routed_sections,
         "fallback_to_all_sections": False,
     }
-    
+
     # Check cache first
     cached = _qa_cache.get(cache_key) if not debug else None
     if cached is not None:
         logger.info(f"Cache hit for question: {question[:50]}...")
         return cached
-    
+
     query_vec = embed_texts([question], settings.embedding_dim)[0]
-    
+
     # Retrieve more candidates than needed to allow filtering
     candidate_rows = state.vdb.search(
         query_vec, retrieval_k, paper_ids=paper_ids, sections=search_sections
@@ -361,13 +376,15 @@ def answer_question_with_sections(
         if debug:
             result["debug"] = debug_payload
         return result
-    
+
     # Filter by relevance threshold (dense scores)
-    relevant_rows = [r for r in candidate_rows if r.get("score", 0) >= relevance_threshold]
+    relevant_rows = [
+        r for r in candidate_rows if r.get("score", 0) >= relevance_threshold
+    ]
 
     if debug:
         debug_payload["candidates_above_threshold"] = len(relevant_rows)
-    
+
     if not relevant_rows:
         # No chunks meet relevance threshold
         best_score = max(r.get("score", 0) for r in candidate_rows)
@@ -388,7 +405,7 @@ def answer_question_with_sections(
         if debug:
             result["debug"] = debug_payload
         return result
-    
+
     # Reorder by hybrid score before final selection
     relevant_rows = sorted(
         relevant_rows,
@@ -403,7 +420,7 @@ def answer_question_with_sections(
         rows = _select_diverse_rows(relevant_rows[: max(final_k * 3, final_k)], final_k)
     else:
         rows = relevant_rows[:final_k]
-    
+
     context_block = _build_context_block(rows)
     prompt = _build_prompt(question, context_block, rows, abstractive=is_abstractive)
 
@@ -415,10 +432,12 @@ def answer_question_with_sections(
             *history,
             {"role": "user", "content": prompt},
         ]
-    
+
     # Try to get LLM answer, with fallback on failure
     try:
-        answer = _ask_llm(question, context_block, rows, messages=messages, abstractive=is_abstractive)
+        answer = _ask_llm(
+            question, context_block, rows, messages=messages, abstractive=is_abstractive
+        )
     except LLMUnavailableError as e:
         logger.error(f"LLM unavailable: {e}")
         # Return error with fallback to extracted relevant sentences
@@ -432,7 +451,7 @@ def answer_question_with_sections(
             "cited_chunks": [],
             "error": {
                 "code": "E006",
-                "message": "LLM service unavailable. Please configure GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY."
+                "message": "LLM service unavailable. Please configure GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY.",
             },
             "fallback_context": _extract_top_sentences(rows, max_sentences=3),
         }
@@ -446,11 +465,11 @@ def answer_question_with_sections(
 
     parsed_answer = _parse_grounded_answer(answer, rows)
     cited_numbers = parsed_answer["cited_excerpts"]
-    
+
     # Verify answer grounding
     avg_relevance = sum(r.get("score", 0) for r in rows) / len(rows)
     confidence = min(avg_relevance * 1.2, 1.0)  # Scale up slightly, cap at 1.0
-    
+
     # Check if answer indicates insufficient information
     insufficient_indicators = [
         "do not contain sufficient",
@@ -459,9 +478,8 @@ def answer_question_with_sections(
         "excerpts do not",
     ]
     answer_lower = answer.lower()
-    is_grounded = (
-        len(cited_numbers) > 0
-        or not any(ind in answer_lower for ind in insufficient_indicators)
+    is_grounded = len(cited_numbers) > 0 or not any(
+        ind in answer_lower for ind in insufficient_indicators
     )
 
     result = {
@@ -477,11 +495,11 @@ def answer_question_with_sections(
 
     if debug:
         result["debug"] = debug_payload
-    
+
     # Cache the result
     if not debug:
         _qa_cache.set(cache_key, result)
-    
+
     return result
 
 
