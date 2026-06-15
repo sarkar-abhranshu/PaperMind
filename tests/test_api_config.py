@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.core.state import state
+from app.models.schemas import IngestedPaper
 
 
 client = TestClient(app)
@@ -26,8 +27,8 @@ def test_task_without_ingestion_fails() -> None:
 
 
 def test_ask_requires_question() -> None:
-    state.papers["p1"] = type("Obj", (), {"paper_id": "p1", "filename": "a.pdf", "raw_text": "x"})()
-    state.paper_embeddings["p1"] = [0.0] * 128
+    state.add_paper("p1", IngestedPaper(paper_id="p1", filename="a.pdf", raw_text="x"))
+    state.add_embedding("p1", [0.0] * 128)
     response = client.post("/task", json={"task": "ask"})
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "E011"

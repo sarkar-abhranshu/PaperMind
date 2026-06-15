@@ -1,4 +1,6 @@
 from app.core.state import state
+from app.services.embedding_engine import embed_texts
+from app.config import settings
 from app.services.qa_service import answer_question_with_sections
 
 
@@ -7,6 +9,7 @@ def setup_function() -> None:
 
 
 def test_qa_insufficient_context_when_filter_excludes_sections() -> None:
+    embedding = embed_texts(["Results describe higher accuracy."], settings.embedding_dim)[0]
     state.vdb.upsert(
         [
             {
@@ -15,7 +18,7 @@ def test_qa_insufficient_context_when_filter_excludes_sections() -> None:
                 "section": "results",
                 "chunk_index": 0,
                 "text": "Results describe higher accuracy.",
-                "embedding": [0.1, 0.2, 0.3],
+                "embedding": embedding,
             }
         ]
     )

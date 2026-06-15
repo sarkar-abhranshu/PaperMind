@@ -9,19 +9,19 @@ def setup_function() -> None:
 
 def test_analysis_returns_structured_pipeline_output() -> None:
     pid = "p1"
-    state.papers[pid] = IngestedPaper(paper_id=pid, filename="transformer.pdf", raw_text="dummy")
-    state.sections[pid] = {
+    state.add_paper(pid, IngestedPaper(paper_id=pid, filename="transformer.pdf", raw_text="dummy"))
+    state.add_sections(pid, {
         "abstract": "We propose a Transformer model for sequence transduction.",
         "intro": "RNNs are sequential and slow. We propose a novel architecture based on attention.",
         "method": "The method uses multi-head self-attention and feed-forward layers.",
         "results": "The model reaches 28.4 BLEU on WMT14 En-De.",
         "conclusion": "However, ablation analysis is limited and left for future work.",
         "other": "",
-    }
-    state.chunks[pid] = [
+    })
+    state.add_chunks(pid, [
         Chunk(chunk_id="1", paper_id=pid, section="intro", chunk_index=0, text="RNNs are sequential and slow."),
         Chunk(chunk_id="2", paper_id=pid, section="method", chunk_index=1, text="Uses self-attention."),
-    ]
+    ])
 
     out = analyse([pid])
 

@@ -9,15 +9,15 @@ def setup_function() -> None:
 
 def test_explanation_levels_are_distinct() -> None:
     pid = "p1"
-    state.papers[pid] = IngestedPaper(paper_id=pid, filename="paper.pdf", raw_text="dummy")
-    state.sections[pid] = {
+    state.add_paper(pid, IngestedPaper(paper_id=pid, filename="paper.pdf", raw_text="dummy"))
+    state.add_sections(pid, {
         "abstract": "We propose a transformer model for machine translation.",
         "intro": "RNNs are sequential and slow.",
         "method": "The method uses self-attention with encoder-decoder blocks.",
         "results": "The model achieves 28.4 BLEU on WMT14.",
         "conclusion": "Future work includes stronger ablations.",
         "other": "",
-    }
+    })
 
     beginner = explain(pid, "beginner")
     intermediate = explain(pid, "intermediate")
@@ -37,18 +37,18 @@ def test_explanation_levels_are_distinct() -> None:
 
 def test_visual_explanation_returns_diagram() -> None:
     pid = "p2"
-    state.papers[pid] = IngestedPaper(paper_id=pid, filename="paper.pdf", raw_text="dummy")
-    state.sections[pid] = {
+    state.add_paper(pid, IngestedPaper(paper_id=pid, filename="paper.pdf", raw_text="dummy"))
+    state.add_sections(pid, {
         "abstract": "We use transformer for tasks.",
         "intro": "Background on transformers.",
         "method": "The method uses self-attention.",
         "results": "Good results.",
         "conclusion": "Future work.",
         "other": "",
-    }
-    state.chunks[pid] = [
+    })
+    state.add_chunks(pid, [
         Chunk(chunk_id="1", paper_id=pid, section="other", chunk_index=0, text="Simple text."),
-    ]
+    ])
 
     visual = explain(pid, "visual")
     assert visual["level"] == "visual"

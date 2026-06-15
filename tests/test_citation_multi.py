@@ -8,16 +8,16 @@ def setup_function() -> None:
 
 
 def test_multi_paper_citations_grouped_by_paper() -> None:
-    state.papers["p1"] = IngestedPaper(
+    state.add_paper("p1", IngestedPaper(
         paper_id="p1",
         filename="paper-one.pdf",
         raw_text="This is consistent with prior work (Alpha et al., 2020).",
-    )
-    state.papers["p2"] = IngestedPaper(
+    ))
+    state.add_paper("p2", IngestedPaper(
         paper_id="p2",
         filename="paper-two.pdf",
         raw_text="However, unlike (Beta, 2019), this approach scales better.",
-    )
+    ))
 
     result = analyse_citations_for_papers(["p1", "p2"])
 

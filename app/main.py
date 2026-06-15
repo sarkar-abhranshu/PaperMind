@@ -1,13 +1,14 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings, update_settings
 from app.core.errors import ERRORS
 from app.core.state import state
+from app.core.user_context import set_current_user_id
 from app.models.schemas import (
     AnalysisRequest, AnalysisResponse,
     CitationRequest, CitationResponse,
@@ -26,6 +27,14 @@ from app.services.task_router import route_task
 
 app = FastAPI(title="PaperMind MVP", version="0.1.0")
 app.mount("/web", StaticFiles(directory="app/web"), name="web")
+
+
+@app.middleware("http")
+async def user_context_middleware(request: Request, call_next) -> str:
+    user_id = request.headers.get("X-User-Id", "default")
+    set_current_user_id(user_id)
+    response = await call_next(request)
+    return response
 
 
 @app.get("/")

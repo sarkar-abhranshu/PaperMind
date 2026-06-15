@@ -1,150 +1,112 @@
-import threading
 from typing import Optional
 
+from app.core.user_context import get_current_user_id
+from app.core.user_state import UserStateStore
 from app.models.schemas import Chunk, IngestedPaper
 from app.services.vector_db import ChromaVectorDB
 
 
 class AppState:
-    """Thread-safe application state using RLock for concurrent access."""
-    
-    def __init__(self) -> None:
-        self._lock = threading.RLock()
-        self._papers: dict[str, IngestedPaper] = {}
-        self._sections: dict[str, dict[str, str]] = {}
-        self._chunks: dict[str, list[Chunk]] = {}
-        self._paper_embeddings: dict[str, list[float]] = {}
+    def __init__(self, db_path: str = "./data/user_state.db") -> None:
+        self._stores: dict[str, UserStateStore] = {}
         self._vdb = ChromaVectorDB()
-        self._selected_papers: set[str] = set()
-        self._conversations: dict[str, list[dict]] = {}
+        self._db_path = db_path
+
+    def _get_store(self, user_id: str) -> UserStateStore:
+        if user_id not in self._stores:
+            self._stores[user_id] = UserStateStore(user_id, db_path=self._db_path)
+        return self._stores[user_id]
 
     @property
     def papers(self) -> dict[str, IngestedPaper]:
-        """Thread-safe access to papers dictionary."""
-        with self._lock:
-            return self._papers.copy()
-    
-    def get_paper(self, paper_id: str) -> Optional[IngestedPaper]:
-        """Thread-safe get single paper."""
-        with self._lock:
-            return self._papers.get(paper_id)
-    
-    def add_paper(self, paper_id: str, paper: IngestedPaper) -> None:
-        """Thread-safe add paper."""
-        with self._lock:
-            self._papers[paper_id] = paper
-    
-    def remove_paper(self, paper_id: str) -> None:
-        """Thread-safe remove paper."""
-        with self._lock:
-            self._papers.pop(paper_id, None)
+        return self._get_store(get_current_user_id()).get_all_papers()
+
+    def get_paper(self, paper_id: str, user_id: Optional[str] = None) -> Optional[IngestedPaper]:
+        uid = user_id or get_current_user_id()
+        return self._get_store(uid).get_paper(paper_id)
+
+    def add_paper(self, paper_id: str, paper: IngestedPaper, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).add_paper(paper_id, paper)
+
+    def remove_paper(self, paper_id: str, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).remove_paper(paper_id)
 
     @property
     def sections(self) -> dict[str, dict[str, str]]:
-        """Thread-safe access to sections dictionary."""
-        with self._lock:
-            return self._sections.copy()
-    
-    def get_sections(self, paper_id: str) -> Optional[dict[str, str]]:
-        """Thread-safe get sections for a paper."""
-        with self._lock:
-            return self._sections.get(paper_id)
-    
-    def add_sections(self, paper_id: str, sections: dict[str, str]) -> None:
-        """Thread-safe add sections."""
-        with self._lock:
-            self._sections[paper_id] = sections
+        return self._get_store(get_current_user_id()).get_all_sections()
+
+    def get_sections(self, paper_id: str, user_id: Optional[str] = None) -> Optional[dict[str, str]]:
+        uid = user_id or get_current_user_id()
+        return self._get_store(uid).get_sections(paper_id)
+
+    def add_sections(self, paper_id: str, sections: dict[str, str], user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).add_sections(paper_id, sections)
 
     @property
     def chunks(self) -> dict[str, list[Chunk]]:
-        """Thread-safe access to chunks dictionary."""
-        with self._lock:
-            return self._chunks.copy()
-    
-    def get_chunks(self, paper_id: str) -> Optional[list[Chunk]]:
-        """Thread-safe get chunks for a paper."""
-        with self._lock:
-            return self._chunks.get(paper_id)
-    
-    def add_chunks(self, paper_id: str, chunks: list[Chunk]) -> None:
-        """Thread-safe add chunks."""
-        with self._lock:
-            self._chunks[paper_id] = chunks
+        return self._get_store(get_current_user_id()).get_all_chunks()
+
+    def get_chunks(self, paper_id: str, user_id: Optional[str] = None) -> Optional[list[Chunk]]:
+        uid = user_id or get_current_user_id()
+        return self._get_store(uid).get_chunks(paper_id)
+
+    def add_chunks(self, paper_id: str, chunks: list[Chunk], user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).add_chunks(paper_id, chunks)
 
     @property
     def paper_embeddings(self) -> dict[str, list[float]]:
-        """Thread-safe access to embeddings dictionary."""
-        with self._lock:
-            return self._paper_embeddings.copy()
-    
-    def add_embedding(self, paper_id: str, embedding: list[float]) -> None:
-        """Thread-safe add embedding."""
-        with self._lock:
-            self._paper_embeddings[paper_id] = embedding
+        return self._get_store(get_current_user_id()).get_all_embeddings()
+
+    def add_embedding(self, paper_id: str, embedding: list[float], user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).add_embedding(paper_id, embedding)
 
     @property
     def vdb(self) -> ChromaVectorDB:
-        """Direct access to VectorDB (VectorDB itself should be thread-safe)."""
         return self._vdb
 
     @property
     def selected_papers(self) -> set[str]:
-        """Thread-safe access to selected papers set."""
-        with self._lock:
-            return self._selected_papers.copy()
-    
-    def add_selected_paper(self, paper_id: str) -> None:
-        """Thread-safe add to selected papers."""
-        with self._lock:
-            self._selected_papers.add(paper_id)
-    
-    def remove_selected_paper(self, paper_id: str) -> None:
-        """Thread-safe remove from selected papers."""
-        with self._lock:
-            self._selected_papers.discard(paper_id)
-    
-    def toggle_paper_selection(self, paper_id: str) -> bool:
-        """Thread-safe toggle paper selection. Returns new state."""
-        with self._lock:
-            if paper_id in self._selected_papers:
-                self._selected_papers.remove(paper_id)
-                return False
-            else:
-                self._selected_papers.add(paper_id)
-                return True
-    
-    def set_selected_papers(self, paper_ids: list[str]) -> None:
-        """Thread-safe bulk set selected papers."""
-        with self._lock:
-            self._selected_papers = set(paper_ids)
+        return self._get_store(get_current_user_id()).get_selected_papers()
 
-    def get_conversation(self, conversation_id: str) -> list[dict]:
-        """Thread-safe get conversation history; returns empty list if absent."""
-        with self._lock:
-            return self._conversations.get(conversation_id, []).copy()
+    def add_selected_paper(self, paper_id: str, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).add_selected_paper(paper_id)
 
-    def append_to_conversation(self, conversation_id: str, role: str, content: str) -> None:
-        """Thread-safe append message to a conversation."""
-        with self._lock:
-            if conversation_id not in self._conversations:
-                self._conversations[conversation_id] = []
-            self._conversations[conversation_id].append({"role": role, "content": content})
+    def remove_selected_paper(self, paper_id: str, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).remove_selected_paper(paper_id)
 
-    def clear_conversation(self, conversation_id: str) -> None:
-        """Thread-safe clear a conversation history."""
-        with self._lock:
-            self._conversations.pop(conversation_id, None)
+    def toggle_paper_selection(self, paper_id: str, user_id: Optional[str] = None) -> bool:
+        uid = user_id or get_current_user_id()
+        return self._get_store(uid).toggle_paper_selection(paper_id)
 
-    def clear(self) -> None:
-        """Thread-safe clear all state."""
-        with self._lock:
-            self._papers.clear()
-            self._sections.clear()
-            self._chunks.clear()
-            self._paper_embeddings.clear()
-            self._vdb.reset()
-            self._selected_papers.clear()
-            self._conversations.clear()
+    def set_selected_papers(self, paper_ids: list[str], user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).set_selected_papers(paper_ids)
+
+    def get_conversation(self, conversation_id: str, user_id: Optional[str] = None) -> list[dict]:
+        uid = user_id or get_current_user_id()
+        return self._get_store(uid).get_conversation(conversation_id)
+
+    def append_to_conversation(
+        self, conversation_id: str, role: str, content: str, user_id: Optional[str] = None
+    ) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).append_to_conversation(conversation_id, role, content)
+
+    def clear_conversation(self, conversation_id: str, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).clear_conversation(conversation_id)
+
+    def clear(self, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._get_store(uid).clear()
+        self._vdb.reset()
 
 
 state = AppState()

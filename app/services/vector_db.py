@@ -1,7 +1,10 @@
 from pathlib import Path
+from typing import Optional
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+
+from app.core.user_context import get_current_user_id
 
 
 class ChromaVectorDB:
@@ -22,14 +25,16 @@ class ChromaVectorDB:
             metadata={"hnsw:space": "cosine"},
         )
 
-    def upsert(self, rows: list[dict[str, object]]) -> None:
+    def upsert(self, rows: list[dict]) -> None:
         if not rows:
             return
 
         ids: list[str] = []
         embeddings: list[list[float]] = []
-        metadatas: list[dict[str, object]] = []
+        metadatas: list[dict] = []
         documents: list[str] = []
+
+        user_id = get_current_user_id()
 
         for row in rows:
             ids.append(str(row["chunk_id"]))
@@ -39,6 +44,7 @@ class ChromaVectorDB:
                     "paper_id": row["paper_id"],
                     "section": row["section"],
                     "chunk_index": row["chunk_index"],
+                    "user_id": user_id,
                 }
             )
             documents.append(str(row["text"]))
@@ -54,19 +60,21 @@ class ChromaVectorDB:
         self,
         query_vector: list[float],
         k: int,
-        paper_ids: list[str] | None = None,
-        sections: list[str] | None = None,
-    ) -> list[dict[str, object]]:
+        paper_ids: Optional[list[str]] = None,
+        sections: Optional[list[str]] = None,
+        user_id: Optional[str] = None,
+    ) -> list[dict]:
         if k <= 0:
             return []
 
-        where: dict[str, object] = {}
+        uid = user_id or get_current_user_id()
+        conditions: list[dict] = [{"user_id": uid}]
         if paper_ids:
-            where["paper_id"] = {"$in": paper_ids}
+            conditions.append({"paper_id": {"$in": paper_ids}})
         if sections:
-            where["section"] = {"$in": sections}
+            conditions.append({"section": {"$in": sections}})
 
-        where_clause = where if where else None
+        where_clause: Optional[dict] = {"$and": conditions} if len(conditions) > 1 else conditions[0]
 
         results = self._collection.query(
             query_embeddings=[query_vector],
@@ -79,9 +87,8 @@ class ChromaVectorDB:
         metadatas = (results.get("metadatas") or [[]])[0]
         documents = (results.get("documents") or [[]])[0]
         distances = (results.get("distances") or [[]])[0]
-        embeddings: list[list[float]] = []
 
-        rows: list[dict[str, object]] = []
+        rows: list[dict] = []
         for idx, chunk_id in enumerate(ids):
             metadata = metadatas[idx] if idx < len(metadatas) else {}
             distance = distances[idx] if idx < len(distances) else 0.0
@@ -98,6 +105,10 @@ class ChromaVectorDB:
             )
 
         return rows
+
+    def clear_user_data(self, user_id: Optional[str] = None) -> None:
+        uid = user_id or get_current_user_id()
+        self._collection.delete(where={"user_id": uid})
 
     def reset(self) -> None:
         name = self._collection.name

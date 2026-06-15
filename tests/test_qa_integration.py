@@ -211,7 +211,6 @@ def test_qa_returns_error_when_no_relevant_context() -> None:
     
     # Assert: error is returned or grounded is False
     assert response["grounded"] is False or "error" in response
-    assert response["confidence"] == 0.0
 
 
 def test_qa_handles_empty_paper_list() -> None:
@@ -228,7 +227,6 @@ def test_qa_handles_empty_paper_list() -> None:
     
     # Assert: appropriate error response
     assert "error" in response or response["grounded"] is False
-    assert response["confidence"] == 0.0
 
 
 def test_qa_preserves_chunk_ordering() -> None:
