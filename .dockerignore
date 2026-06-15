@@ -10,5 +10,4 @@ scripts/
 tests/
 cache/
 data/
-*.md
 .DS_Store

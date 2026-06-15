@@ -14,12 +14,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -m -u 1000 user
+
 WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY . .
+COPY --chown=user:user . .
 
-ENV PYTHONBUFFERED=1
+RUN mkdir -p /data && chown -R user:user /data
+
+USER user
+
+ENV PYTHONUNBUFFERED=1 \
+    DATA_DIR=/data \
+    HOME=/home/user
 
 EXPOSE 7860
 
