@@ -21,13 +21,14 @@ jobs:
           python-version: "3.10"
 
       - name: Install Hugging Face Hub
-        run: pip install huggingface_hub
+        run: pip install --upgrade huggingface_hub
 
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          huggingface-cli upload sarkar-abhranshu/papermind . \
+          hf login --token $HF_TOKEN --add-to-git-credential
+          hf upload sarkar-abhranshu/papermind . . \
             --repo-type=space \
             --commit-message="Automated sync from GitHub Actions" \
-            --exclude ".git/*" ".github/*"
+            --exclude=".git/*" --exclude=".github/*"
