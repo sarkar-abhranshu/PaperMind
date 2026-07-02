@@ -6,7 +6,6 @@ colorTo: purple
 sdk: docker
 pinned: false
 ---
-
 # PaperMind
 
 **Multi-document research analysis powered by semantic search, LLM reasoning, and a zero-friction local UI.**
